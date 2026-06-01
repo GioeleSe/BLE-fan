@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BLE Fan Controller</title>
+</head>
+
+<body>
+
+    <h1>ESP32 BLE Fan Control</h1>
+    <h2>The fan control service is available only on Chrome and Edge since Firefox doesn't support Web Bluetooth :/</h2>
+    <div id="status">Status: Disconnected</div>
+
+    <br>
+    <button class="btn-connect no-firefox" onclick="connectBLE()">Connect Fan</button><br><br>
+    <button class="btn-on no-firefox" onclick="turnOnDefault()">Turn ON (75%)</button>
+    <button class="btn-off no-firefox" onclick="turnOffFan()">Turn OFF</button>
+
+    <div class="slider-container no-firefox">
+        <label class="slider-label" for="speedSlider">Fan Speed: <span id="speedValue">50</span>%</label>
+        <input type="range" id="speedSlider" min="0" max="100" value="60" oninput="updateSliderDisplay(this.value)"
+            onchange="sendSliderValue(this.value)">
+    </div>
+
+    <script>
+        if (navigator.userAgent.toLowerCase().includes('firefox')) {
+            document.querySelectorAll('.no-firefox').forEach(e => {
+                e.toggleAttribute('hidden', true);
+            });
+        }
+
+        const SERVICE_UUID = "4fa4c201-1fb5-459e-8fcc-c5c9c331914b";
+        const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+        let fanCharacteristic = null;
+        let bleDevice = null;
+
+        async function connectBLE() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerText = "Status: Searching for device...";
+
+            try {
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: [SERVICE_UUID] }]
+                });
+
+                statusDiv.innerText = "Status: Connecting to GATT Server...";
+                const server = await bleDevice.gatt.connect();
+
+                statusDiv.innerText = "Status: Getting Service...";
+                const service = await server.getPrimaryService(SERVICE_UUID);
+
+                statusDiv.innerText = "Status: Getting Characteristic...";
+                fanCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+                statusDiv.innerText = "Status: Connected to Fan!";
+
+                bleDevice.addEventListener('gattserverdisconnected', () => {
+                    statusDiv.innerText = "Status: Disconnected";
+                    fanCharacteristic = null;
+                });
+
+            } catch (error) {
+                console.log(error);
+                statusDiv.innerText = "Status: Connection Failed. " + error.message;
+            }
+        }
+
+        // Updates the label text instantly while moving the slider knob
+        function updateSliderDisplay(val) {
+            document.getElementById('speedValue').innerText = val;
+        }
+
+        // Fires the BLE write action specifically when you finish adjusting or release the slider
+        function sendSliderValue(val) {
+            sendControlSignal(val.toString());
+        }
+
+        // Helper to sync slider display and turn fan on at a safe default of 75%
+        function turnOnDefault() {
+            document.getElementById('speedSlider').value = 75;
+            updateSliderDisplay(75);
+            sendControlSignal('75');
+        }
+
+        // Helper to sync slider down to its floor value but send an absolute 0 to engage your code's relay cutoff logic
+        function turnOffFan() {
+            sendControlSignal('0');
+        }
+
+        async function sendControlSignal(value) {
+            if (!fanCharacteristic) {
+                alert("Please connect to the BLE device first!");
+                return;
+            }
+            try {
+                const encoder = new TextEncoder();
+                await fanCharacteristic.writeValue(encoder.encode(value));
+                console.log(`Sent: ${value}`);
+            } catch (error) {
+                console.error("Error writing characteristic:", error);
+            }
+        }
+    </script>
+</body>
+
+</html>
