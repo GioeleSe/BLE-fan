@@ -10,7 +10,7 @@
 
 void stopFanSystem()
 {
-    ledcWrite(FAN_PWM_PIN, 0);
+    ledcWrite(FAN_PWM_PIN, 255); // for inverted pwm signal
     digitalWrite(FAN_RELAY_PIN, LOW);
     Serial.println("System Safe: Fan Stopped");
 }
@@ -49,7 +49,7 @@ class MyCharacteristicCallbacks : public NimBLECharacteristicCallbacks
                 int targetPWM = map(percentage, 1, 100, 3, 255);
 
                 digitalWrite(FAN_RELAY_PIN, HIGH);
-                ledcWrite(FAN_PWM_PIN, targetPWM);
+                ledcWrite(FAN_PWM_PIN, 255-targetPWM); // inverted duty
             }
             else
             {
